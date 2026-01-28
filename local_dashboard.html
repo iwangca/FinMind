@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FinMind Local Dashboard</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f3ea;
+        --card: #fffaf0;
+        --ink: #1f1b16;
+        --accent: #a05c2a;
+        --muted: #7c6d5f;
+        --border: #e2d6c7;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: radial-gradient(800px 500px at 10% 10%, #fff0d9, #f7f3ea);
+        color: var(--ink);
+        font-family: "Noto Serif TC", "Source Han Serif TC", "PMingLiU", serif;
+      }
+      main {
+        max-width: 980px;
+        margin: 32px auto 80px;
+        padding: 0 20px;
+      }
+      h1 {
+        font-size: 28px;
+        letter-spacing: 0.5px;
+        margin: 0 0 10px;
+      }
+      p {
+        margin: 0 0 20px;
+        color: var(--muted);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+        margin: 10px 0 4px;
+      }
+      input, select, button {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        font-size: 14px;
+        background: white;
+      }
+      button {
+        margin-top: 12px;
+        background: var(--accent);
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button:hover {
+        filter: brightness(0.95);
+      }
+      pre {
+        background: #1f1b16;
+        color: #f7f3ea;
+        padding: 12px;
+        border-radius: 10px;
+        height: 240px;
+        overflow: auto;
+        font-size: 12px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FinMind 本地控制台</h1>
+      <p>本頁在你的電腦本地運行，提供更新資料與十字 K 掃描。</p>
+
+      <div class="grid">
+        <div class="card">
+          <h2>更新日線資料</h2>
+          <label>股票清單</label>
+          <select id="stockFile">
+            <option value="stock_ids_futures.txt">全部清單</option>
+            <option value="stock_ids_23_31.txt">23xx–31xx</option>
+          </select>
+
+          <label>日期範圍</label>
+          <select id="dateMode">
+            <option value="today">今天（收盤後）</option>
+            <option value="yesterday">昨天</option>
+            <option value="custom">自訂</option>
+          </select>
+          <input id="customDate" placeholder="YYYY-MM-DD" />
+
+          <div class="row">
+            <div>
+              <label>切片月份</label>
+              <input id="chunkMonths" value="6" />
+            </div>
+            <div>
+              <label>Datasets</label>
+              <input
+                id="datasets"
+                value="price,price_adj,per_pbr,institutional,margin,shareholding,holding_shares_per,securities_lending"
+              />
+            </div>
+          </div>
+
+          <button onclick="runFetch()">開始更新</button>
+        </div>
+
+        <div class="card">
+          <h2>十字 K 掃描</h2>
+          <label>日期（留空=最新）</label>
+          <input id="dojiDate" placeholder="YYYY-MM-DD" />
+
+          <label>最大檔數差（open -> close）</label>
+          <input id="maxTicks" value="4" />
+
+          <label>資料路徑</label>
+          <input id="dataDir" value="data/finmind/price" />
+
+          <button onclick="runDoji()">開始掃描</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <h2>執行結果</h2>
+        <pre id="output">等待執行...</pre>
+      </div>
+    </main>
+
+    <script>
+      const output = document.getElementById("output");
+
+      function showResult(result) {
+        const parts = [];
+        parts.push("exit code: " + result.returncode);
+        if (result.stdout) parts.push(result.stdout);
+        if (result.stderr) parts.push(result.stderr);
+        output.textContent = parts.join("\n\n");
+      }
+
+      async function runFetch() {
+        output.textContent = "執行中...";
+        const stockFile = document.getElementById("stockFile").value;
+        const mode = document.getElementById("dateMode").value;
+        const date = document.getElementById("customDate").value;
+        const chunkMonths = document.getElementById("chunkMonths").value;
+        const datasets = document.getElementById("datasets").value;
+        const params = new URLSearchParams({
+          stock_file: stockFile,
+          mode,
+          date,
+          chunk_months: chunkMonths,
+          datasets,
+        });
+        const res = await fetch("/api/fetch?" + params.toString());
+        const data = await res.json();
+        showResult(data.result);
+      }
+
+      async function runDoji() {
+        output.textContent = "執行中...";
+        const date = document.getElementById("dojiDate").value;
+        const maxTicks = document.getElementById("maxTicks").value;
+        const dataDir = document.getElementById("dataDir").value;
+        const params = new URLSearchParams({
+          date,
+          max_ticks: maxTicks,
+          data_dir: dataDir,
+        });
+        const res = await fetch("/api/doji?" + params.toString());
+        const data = await res.json();
+        showResult(data.result);
+      }
+    </script>
+  </body>
+</html>
